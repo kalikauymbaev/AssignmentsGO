@@ -135,50 +135,6 @@ func getProduct(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonData)
 }
 
-func checkRedis() {
-	// First check Redis
-	val, err := rdb.Get(ctx, idQuery).Result()
-	if err == nil {
-		log.Println("Retrieved data from Redis")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(val))
-		return
-	} else {
-		log.Printf("Data not found in Redis, error: %v", err)
-	}
-
-	// If not in Redis, query the database
-	var product Product
-	err = db.QueryRow("SELECT id, name, description, price FROM products WHERE id = $1", id).Scan(&product.ID, &product.Name, &product.Description, &product.Price)
-	if err != nil {
-		log.Printf("Error querying database: %v", err)
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Serialize the product and store in Redis
-	jsonData, err := json.Marshal(product)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = rdb.Set(ctx, idQuery, jsonData, 10*time.Minute).Result() // Set with TTL
-	if err != nil {
-		log.Printf("Failed to set data in Redis: %v", err)
-	} else {
-		log.Println("Data stored in Redis successfully")
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonData)
-}
-
 func main() {
 	db = setupDB()
 	defer db.Close()
